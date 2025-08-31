@@ -1,0 +1,73 @@
+# Kaayaan MCP News v2.1 - Production Docker Compose
+# Add this service to your existing Kaayaan stack
+
+version: '3.8'
+
+services:
+  kaayaan-mcp-news:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: kaayaan-mcp-news
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    networks:
+      - kaayaan_default
+    environment:
+      # Required Environment Variables
+      - MONGODB_URL=${MONGODB_URL:-mongodb://kaayaan:kaayaan%402025@mongodb:27017/}
+      - REDIS_URL=${REDIS_URL:-redis://:kaayaan@2025@redis:6379}
+      - POSTGRESQL_URL=${POSTGRESQL_URL:-postgresql://n8n_user:kaayaan_n8n_2025@postgresql:5432/n8n_postgres_db}
+      - WHATSAPP_API=${WHATSAPP_API:-https://waha.kaayaan.ai}
+      - WHATSAPP_SESSION=${WHATSAPP_SESSION:-97008525}
+      
+      # MCP Configuration
+      - MCP_SERVER_NAME=kaayaan-mcp-news
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=Asia/Kuwait
+      
+      # AI/LLM Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Optional Webhook Configuration
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      
+      # Security
+      - API_TOKEN=${API_TOKEN}
+      
+    volumes:
+      - ./logs:/app/logs:rw
+    
+    healthcheck:
+      test: ["CMD", "python3", "-c", "print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    labels:
+      - "traefik.enable=false"  # No HTTP exposure needed for MCP stdio
+      - "kaayaan.service=mcp-news"
+      - "kaayaan.version=2.1"
+      - "kaayaan.component=ai-analysis"
+    
+    depends_on:
+      - redis
+      - mongodb
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# External networks (must exist in Kaayaan stack)
+networks:
+  kaayaan_default:
+    external: true

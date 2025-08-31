@@ -1,15 +1,238 @@
-# Python cache
+# Kaayaan MCP News v2.1 - Production .gitignore
+# Comprehensive security-focused ignore rules
+
+# =============================================================================
+# SECURITY - NEVER COMMIT THESE
+# =============================================================================
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+*.key
+*.pem
+*.p12
+*.pfx
+credentials/
+secrets/
+keys/
+certs/
+
+# API Keys and Tokens
+*api_key*
+*secret*
+*token*
+*password*
+*credential*
+
+# =============================================================================
+# PYTHON
+# =============================================================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Virtual environments
+# Virtual Environments
+env/
 venv/
-.env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
 
-# Logs
-logs/*
+# Python Cache
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# =============================================================================
+# DEVELOPMENT TOOLS
+# =============================================================================
+# Claude Code Development
+.claude/
+.daddy/
+daddy_project.md
+
+# Linting and Quality Tools
+.ruff_cache/
+.mypy_cache/
+.pylint.d/
+.qty/
+.cache/
+
+# IDE and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# =============================================================================
+# LOGS AND TEMPORARY FILES
+# =============================================================================
+logs/
 *.log
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
 
-# Docker / local files
-*.sqlite3
+# Application Logs
+mcp-news-*.log
+error.log
+debug.log
+access.log
+
+# =============================================================================
+# OPERATING SYSTEM
+# =============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# DOCKER AND CONTAINERS
+# =============================================================================
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# Container Volumes
+volumes/
+data/
+
+# =============================================================================
+# DATABASE AND CACHE
+# =============================================================================
 *.db
+*.sqlite
+*.sqlite3
+dump.rdb
+redis.conf
+
+# =============================================================================
+# NODE.JS (if any frontend components)
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+.eslintcache
+.yarn-integrity
+.next
+out/
+
+# =============================================================================
+# TESTING AND CI/CD
+# =============================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+.nyc_output
+test-results/
+junit.xml
+
+# CI/CD Artifacts
+.github/
+.gitlab-ci.yml
+.circleci/
+.travis.yml
+Jenkinsfile
+
+# =============================================================================
+# MONITORING AND ANALYTICS
+# =============================================================================
+*.pid
+newrelic.ini
+.sentryclirc
+
+# =============================================================================
+# BACKUP AND ARCHIVE FILES
+# =============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# =============================================================================
+# CONFIGURATION OVERRIDES
+# =============================================================================
+config.local.*
+*-local.*
+override.*
+
+# =============================================================================
+# CUSTOM APPLICATION FILES
+# =============================================================================
+# Add your application-specific files here
+# user_data/
+# uploads/
+# cache/
