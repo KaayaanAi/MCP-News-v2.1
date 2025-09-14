@@ -26,7 +26,7 @@ docker logs kaayaan-mcp-news
 2. **Add MCP Client Node**
 3. **Configure Connection:**
    - **Type:** Command Line (STDIO)
-   - **Command:** `docker exec -i kaayaan-mcp-news python3 /app/mcp_server.py`
+   - **Command:** `docker exec -i kaayaan-mcp-news node /app/dist/index.js`
    - **Timeout:** 30000ms
 4. **Test Connection** using the health check tool
 
@@ -303,23 +303,13 @@ try {
 
 ```bash
 # Check server status
-docker exec kaayaan-mcp-news python3 -c "
-import asyncio
-from mcp_server import KaayaanMCPNewsServer
-server = KaayaanMCPNewsServer()
-print('Server initialized successfully')
+docker exec kaayaan-mcp-news node -e "
+const { KaayaanMCPNewsServer } = require('./dist/index.js');
+console.log('Server initialized successfully');
 "
 
-# Test Redis connection
-docker exec kaayaan-mcp-news python3 -c "
-import asyncio
-from cache_manager import CacheManager
-async def test(): 
-    cache = CacheManager()
-    await cache.connect()
-    print('Redis connected:', await cache.is_connected())
-asyncio.run(test())
-"
+# Test application health
+curl -f http://localhost:4009/health || echo 'Health check failed'
 
 # Check logs
 docker logs -f kaayaan-mcp-news

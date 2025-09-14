@@ -5,7 +5,7 @@
   "version": "2.1.0",
   "connection": {
     "type": "Command Line (STDIO)",
-    "command": "docker exec -i kaayaan-mcp-news python3 /app/mcp_server.py",
+    "command": "docker exec -i kaayaan-mcp-news node /app/dist/index.js",
     "environment": "production",
     "timeout": 30000,
     "restart_policy": "on_failure"

@@ -1,58 +1,66 @@
-# Kaayaan MCP News v2.1 - Production Dockerfile
-# Multi-stage build for optimized production image
+# MCP News v2.1 - Production Dockerfile
+# Multi-stage build for optimized TypeScript Node.js application
+# Enhanced with security hardening and performance optimizations
 
-FROM python:3.11-slim AS builder
+FROM node:20-alpine AS builder
 
-# Install build dependencies, create venv, and install packages in one layer
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/* \
-    && python -m venv /opt/venv
+# Set working directory
+WORKDIR /app
 
-ENV PATH="/opt/venv/bin:$PATH"
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt /tmp/
-RUN pip install --no-cache-dir --upgrade pip==23.3.1 \
-    && pip install --no-cache-dir --requirement /tmp/requirements.txt
+# Install all dependencies (including devDependencies for build)
+RUN npm ci --silent --prefer-offline --no-audit
+
+# Copy source code
+COPY src/ ./src/
+
+# Build TypeScript
+RUN npm run build
 
 # Production stage
-FROM python:3.11-slim
+FROM node:20-alpine AS production
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PATH="/opt/venv/bin:$PATH"
+ENV NODE_ENV=production
 ENV TZ=Asia/Kuwait
 
-# Install runtime dependencies and create user in one layer
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && groupadd -r kaayaan && useradd -r -g kaayaan kaayaan
-
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
+# Install runtime dependencies, security updates, and create user
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    curl=8.5.0-r0 \
+    dumb-init=1.2.5-r2 \
+    tini=0.19.0-r1 \
+    && rm -rf /var/cache/apk/* \
+    && addgroup -g 1001 -S kaayaan \
+    && adduser -S kaayaan -u 1001 -G kaayaan
 
 # Create app directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=kaayaan:kaayaan *.py /app/
-COPY --chown=kaayaan:kaayaan start_server.sh /app/
-RUN chmod +x /app/start_server.sh
+# Copy package files first for better caching
+COPY --from=builder --chown=kaayaan:kaayaan /app/package.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production --silent --prefer-offline --no-audit
+
+# Copy built application
+COPY --from=builder --chown=kaayaan:kaayaan /app/dist ./dist
 
 # Switch to non-root user
 USER kaayaan
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-    CMD ["python3", "-c", "import sys; sys.exit(0)"]
+    CMD ["sh", "-c", "curl -f http://localhost:${PORT:-4009}/health || exit 1"]
 
-# Expose port for monitoring (optional)
-EXPOSE 8080
+# Expose default port
+EXPOSE 4009
 
-# Use start script as entrypoint
-ENTRYPOINT ["/app/start_server.sh"]
+# Use tini as init system for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the application with proper signal handling
+CMD ["node", "--enable-source-maps", "--max-old-space-size=512", "dist/index.js"]

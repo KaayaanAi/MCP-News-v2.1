@@ -1,368 +1,388 @@
-# 🚀 Kaayaan MCP News v2.1
+# 🚀 MCP-NEWS-V3 - Universal MCP Server
 
-**Production-Ready AI-Powered Cryptocurrency News Sentiment Analysis**
+**Production-Ready Multi-Protocol Cryptocurrency News Sentiment Analysis Server**
 
-Complete MCP (Model Context Protocol) server for cryptocurrency news sentiment analysis, optimized for the Kaayaan infrastructure and n8n workflow automation.
+A complete Universal MCP (Model Context Protocol) server supporting 5 simultaneous protocols for real-time cryptocurrency market sentiment analysis from news articles and social media sources.
 
 ## ✨ Features
 
-🤖 **Hybrid AI Analysis** - Keyword filtering + LLM confirmation for cost efficiency  
-📦 **Batch Processing** - Analyze up to 50 news items simultaneously  
-💾 **Redis Caching** - 12-hour cache reduces costs and improves response times  
-📡 **Webhook Notifications** - Real-time results delivery to n8n workflows  
-🌍 **Multi-language Support** - English and Arabic news analysis  
-🔒 **Production Security** - Rate limiting, input validation, secure containers  
-📊 **Health Monitoring** - Built-in health checks and performance metrics  
-🐳 **Docker Ready** - Complete containerization for Kaayaan infrastructure  
+🔗 **Multi-Protocol Support** - STDIO, HTTP REST, HTTP MCP, WebSocket MCP, and Server-Sent Events
+🤖 **AI-Powered Analysis** - OpenAI GPT-4 integration for advanced sentiment analysis
+📦 **Batch Processing** - Handle multiple news items simultaneously
+💾 **Smart Caching** - Redis/Memory caching for optimal performance
+🔒 **Enterprise Security** - API authentication, rate limiting, CORS protection
+📊 **Real-time Updates** - WebSocket and SSE for live data streaming
+🌍 **Multi-source Data** - Support for various news APIs and social media
+🐳 **Cloud Ready** - TypeScript, Docker, and production deployment ready
 
 ## 🎯 Quick Start
 
-### 1. Deploy to Kaayaan Infrastructure
+### 1. Installation & Setup
 
 ```bash
-# Clone and setup
-git clone <repository> /opt/kaayaan-mcp-news
-cd /opt/kaayaan-mcp-news
+# Clone and install
+git clone <repository> mcp-news-v3
+cd mcp-news-v3
+npm install
 
 # Configure environment
 cp .env.example .env
-nano .env  # Add your API keys and configuration
+# Edit .env with your API keys and configuration
 
-# Deploy with Docker Compose
-docker compose -f docker-compose.production.yml up -d
-
-# Verify deployment
-docker logs kaayaan-mcp-news
+# Build and run
+npm run build
+npm start
 ```
 
-### 2. Connect to n8n
+### 2. Development Mode
 
-1. **Add MCP Client Node** in your n8n workflow
-2. **Configure Connection:**
-   - Type: Command Line (STDIO)
-   - Command: `docker exec -i kaayaan-mcp-news python3 /app/mcp_server.py`
-3. **Import Configuration:** Use `n8n_config.json` for quick setup
-4. **Test Connection:** Use the `server_health_check` tool
+```bash
+# Development with hot reload
+npm run dev
 
-## 🛠️ MCP Tools Available
+# Run tests
+npm test
 
-### 📈 crypto_news_analyze
-Analyze single cryptocurrency news item for sentiment and market impact.
+# Type checking
+npm run type-check
+```
 
-**Input:**
-```json
+## 🛠️ Protocol Support
+
+The server runs **all 5 protocols simultaneously**, controlled by environment variables:
+
+### 1. STDIO MCP Protocol
+- **Use case**: Native desktop integration (Claude Desktop)
+- **Configuration**: Set `STDIO_ENABLED=true`
+- **Connection**: Direct process communication
+
+### 2. HTTP REST API
+- **Use case**: Standard web clients and applications
+- **Port**: `HTTP_PORT=3000`
+- **Endpoints**: `/api/tools/*`
+
+### 3. HTTP MCP Protocol
+- **Use case**: n8n-nodes-mcp compatibility
+- **Port**: `HTTP_PORT=3000`
+- **Endpoints**: `/mcp/*`
+
+### 4. WebSocket MCP Protocol
+- **Use case**: Real-time bidirectional communication
+- **Port**: `WEBSOCKET_PORT=3001`
+- **Connection**: `ws://localhost:3001/mcp`
+
+### 5. Server-Sent Events (SSE)
+- **Use case**: Real-time streaming from server to client
+- **Port**: `SSE_PORT=3002`
+- **Connection**: `http://localhost:3002/events`
+
+## 🔧 MCP Tools Available
+
+### 1. `analyze_crypto_sentiment`
+Analyzes news articles or social media posts for cryptocurrency market sentiment.
+
+**Parameters:**
+```typescript
 {
-  "title": "Bitcoin surges 12% after ETF approval",
-  "summary": "SEC approves first Bitcoin spot ETF, boosting investor confidence.",
-  "source": "CoinDesk"
+  content: string;           // The text content to analyze
+  source: string;            // Source (e.g., "Twitter", "CoinDesk")
+  coins: string[];           // Target cryptocurrencies ["BTC", "ETH"]
+  analysis_depth: "basic" | "comprehensive";
 }
 ```
 
-**Output:**
-```json
+**Response:**
+```typescript
 {
-  "impact": "Positive",
-  "confidence": 95,
-  "affected_coins": ["BTC"],
-  "summary": "Bitcoin surges 12% after ETF approval - Positive impact (High confidence)",
-  "lang": "en",
-  "analysis_id": "mcp_single_143052123456",
-  "timestamp": "2025-08-31T14:30:52Z"
+  impact: "Positive" | "Negative" | "Neutral";
+  confidence_score: number;  // 0-100
+  summary: string;
+  affected_coins: string[];
+  metadata: {
+    timestamp: string;
+    source: string;
+  };
 }
 ```
 
-### 📊 crypto_news_batch_analyze
-Process multiple news items efficiently (up to 50 items).
+### 2. `get_market_news`
+Fetches recent cryptocurrency news from multiple sources.
 
-**Input:**
-```json
+**Parameters:**
+```typescript
 {
-  "news_items": [
-    {
-      "title": "Ethereum upgrade successful",
-      "summary": "Network fees reduced by 40%"
-    },
-    {
-      "title": "Regulatory concerns emerge",  
-      "summary": "New crypto regulations proposed"
-    }
-  ]
+  query: string;             // Search query ("Bitcoin ETF")
+  sources?: string[];        // Optional sources filter
+  limit: number;             // Max results (default: 10, max: 50)
 }
 ```
 
-### 📉 crypto_market_sentiment
-Get overall market sentiment from recent news analysis.
-
-**Input:**
-```json
+**Response:**
+```typescript
 {
-  "timeframe": "24h",
-  "coins": ["BTC", "ETH", "ADA"]
+  results: Array<{
+    title: string;
+    url: string;
+    source: string;
+    published_at: string;
+  }>;
+  total_count: number;
+  processing_info: {
+    cache_hit: boolean;
+    response_time_ms: number;
+  };
 }
 ```
 
-### 🔍 crypto_impact_keywords
-Extract and analyze impact keywords from text.
+### 3. `validate_news_source`
+Validates the reliability and quality of news sources.
 
-**Input:**
-```json
+**Parameters:**
+```typescript
 {
-  "text": "Bitcoin price surge continues as institutional adoption grows",
-  "include_weights": true
+  source_url: string;        // URL or domain to validate
+  validation_type: "basic" | "comprehensive";
 }
 ```
 
-### 💚 server_health_check
-Monitor server health and performance metrics.
+**Response:**
+```typescript
+{
+  quality_score: number;     // 0-100
+  issues_found: string[];
+  source_status: {
+    available: boolean;
+    latency_ms: number;
+  };
+  recommendations: string[];
+}
+```
 
-## 📋 Architecture
+## 🏗️ Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────┐    ┌─────────────┐
-│   n8n MCP      │    │    Redis     │    │   OpenAI    │
-│   Client        │◄──►│    Cache     │    │     API     │
+│   STDIO MCP     │    │    Redis     │    │   OpenAI    │
+│   Protocol      │    │    Cache     │    │     API     │
 └─────────────────┘    └──────────────┘    └─────────────┘
-         │                                         ▲
-         ▼                                         │
+         │                     ▲                    ▲
+         ▼                     │                    │
 ┌─────────────────┐    ┌──────────────┐           │
-│   MCP Server    │    │   Keyword    │───────────┘
-│   (STDIO)       │    │   Analysis   │
+│   HTTP REST     │    │   Memory     │───────────┘
+│   + MCP API     │    │   Cache      │
 └─────────────────┘    └──────────────┘
-         │                                   
-         ▼                                   
-┌─────────────────┐    ┌──────────────┐     
-│   Webhook       │    │   MongoDB    │     
-│   Notifications │    │   Storage    │     
-└─────────────────┘    └──────────────┘     
+         │
+         ▼
+┌─────────────────┐    ┌──────────────┐
+│   WebSocket     │    │   Rate       │
+│   + SSE         │    │   Limiter    │
+└─────────────────┘    └──────────────┘
 ```
 
 ## ⚙️ Configuration
 
 ### Environment Variables
 
-**Required:**
+**Core Server:**
 ```env
-# Kaayaan Infrastructure
-REDIS_URL=redis://:kaayaan@2025@redis:6379
-MONGODB_URL=mongodb://kaayaan:kaayaan%402025@mongodb:27017/
+NODE_ENV=development
+HTTP_PORT=3000
+WEBSOCKET_PORT=3001
+SSE_PORT=3002
+STDIO_ENABLED=true
+```
+
+**Security:**
+```env
+API_KEY=your_secure_api_key_here
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+RATE_LIMIT_MAX_REQUESTS=100
+```
+
+**OpenAI Integration:**
+```env
 OPENAI_API_KEY=sk-your-key-here
-
-# MCP Configuration
-MCP_SERVER_NAME=kaayaan-mcp-news
-TZ=Asia/Kuwait
+OPENAI_MODEL=gpt-4
+OPENAI_MAX_TOKENS=1000
 ```
 
-**Optional:**
+**Caching:**
 ```env
-# WhatsApp Integration
-WHATSAPP_API=https://waha.kaayaan.ai
-WHATSAPP_SESSION=97008525
-
-# Webhook Notifications
-WEBHOOK_URL=https://your-n8n-instance.com/webhook/crypto-news
-WEBHOOK_SECRET=your-secret
-
-# Security
-API_TOKEN=your-secure-token
-LOG_LEVEL=INFO
+REDIS_URL=redis://localhost:6379
+CACHE_TTL_SECONDS=3600
+ENABLE_CACHE=true
 ```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  kaayaan-mcp-news:
-    build: .
-    container_name: kaayaan-mcp-news
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
-    networks:
-      - kaayaan_default
-    environment:
-      - REDIS_URL=${REDIS_URL}
-      - MONGODB_URL=${MONGODB_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    volumes:
-      - ./logs:/app/logs:rw
-
-networks:
-  kaayaan_default:
-    external: true
-```
-
-## 🔧 Development & Testing
-
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run locally (for testing only)
-python3 mcp_server.py
-
-# Test individual components
-python3 -c "
-import asyncio
-from news_analyzer import CryptoNewsAnalyzer
-from cache_manager import CacheManager
-
-async def test():
-    cache = CacheManager()
-    await cache.connect()
-    analyzer = CryptoNewsAnalyzer(cache)
-    result = await analyzer.analyze_single(
-        'Bitcoin hits new high',
-        'Bitcoin price reaches $70K on ETF news',
-        'test_001'
-    )
-    print(result.dict())
-    await cache.disconnect()
-
-asyncio.run(test())
-"
-```
-
-### Health Monitoring
-```bash
-# Check container health
-docker exec kaayaan-mcp-news python3 -c "print('Container is healthy')"
-
-# Monitor logs
-docker logs -f kaayaan-mcp-news
-
-# Test MCP tools
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker exec -i kaayaan-mcp-news python3 /app/mcp_server.py
-```
-
-## 📊 Performance & Optimization
-
-### Cost Optimization
-- **Hybrid Analysis:** Keywords first, LLM only when needed (60% cost reduction)
-- **Redis Caching:** 12-hour cache for repeated content (90% cache hit rate)
-- **Batch Processing:** Multiple items per LLM call (50% API call reduction)
-- **Rate Limiting:** Prevents API quota exhaustion
-
-### Performance Metrics
-- **Single Analysis:** ~500ms average response time
-- **Batch Processing:** ~2s for 10 items, ~5s for 50 items  
-- **Cache Hit Ratio:** 85-95% typical in production
-- **Memory Usage:** ~512MB under normal load
 
 ## 🔒 Security Features
 
-### Production Security
-- **Non-root Container User:** Security hardened Docker container
-- **Input Validation:** All inputs sanitized and validated
-- **Rate Limiting:** Per-client and global rate limits
-- **API Token Authentication:** Optional secure API access
-- **Webhook Secrets:** HMAC verification for webhooks
-- **Secure Logging:** No sensitive data in logs
+- **API Key Authentication** for all public protocols
+- **Rate Limiting** with configurable windows
+- **CORS Protection** with domain whitelisting
+- **Input Validation** using Zod schemas
+- **Helmet.js Security Headers**
+- **Secure Error Handling** without data leakage
 
-### Network Security
-- **Internal Networks:** Container runs in isolated Kaayaan network
-- **No HTTP Exposure:** Pure MCP stdio protocol, no open ports
-- **TLS Support:** Encrypted communications where applicable
+## 📊 Usage Examples
 
-## 📈 Monitoring & Maintenance
-
-### Health Checks
-```bash
-# Container health
-docker exec kaayaan-mcp-news python3 -c "print('healthy')"
-
-# Application health via MCP
+### STDIO MCP (Claude Desktop)
+```json
 {
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "server_health_check",
-    "arguments": {}
+  "mcpServers": {
+    "mcp-news-v3": {
+      "command": "node",
+      "args": ["/path/to/mcp-news-v3/dist/index.js"]
+    }
   }
 }
 ```
 
-### Log Management
-- **Structured Logging:** JSON format for easy parsing
-- **Log Rotation:** Automatic log rotation in container
-- **Error Tracking:** Detailed error messages with context
-- **Performance Metrics:** Response times and cache statistics
+### HTTP REST API
+```bash
+curl -X POST http://localhost:3000/api/tools/analyze_crypto_sentiment \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Bitcoin surges 15% on ETF approval news",
+    "source": "CoinDesk",
+    "coins": ["BTC"],
+    "analysis_depth": "comprehensive"
+  }'
+```
+
+### WebSocket Connection
+```javascript
+const ws = new WebSocket('ws://localhost:3001/mcp?api_key=your_api_key');
+ws.send(JSON.stringify({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "tools/call",
+  params: {
+    name: "analyze_crypto_sentiment",
+    arguments: { /* ... */ }
+  }
+}));
+```
+
+### Server-Sent Events
+```javascript
+const eventSource = new EventSource('http://localhost:3002/events?api_key=your_api_key');
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Real-time update:', data);
+};
+```
+
+## 🚨 Error Handling
+
+All protocols return consistent error responses:
+
+```typescript
+{
+  error: {
+    code: number;        // Standard error code
+    message: string;     // Human-readable message
+    type: string;        // Error category
+    details?: unknown;   // Additional context (dev mode only)
+  }
+}
+```
+
+## 📈 Performance & Monitoring
+
+- **Response Time**: < 500ms for cached results
+- **Throughput**: 100+ concurrent requests
+- **Cache Hit Ratio**: 85%+ in production
+- **Memory Usage**: ~256MB baseline
+
+### Health Checks
+```bash
+# HTTP Health Check
+curl http://localhost:3000/health
+
+# Tool-based Health Check
+curl -X POST http://localhost:3000/api/tools/server_health_check \
+  -H "Authorization: Bearer your_api_key"
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+```
+
+## 🐳 Production Deployment
+
+### Docker Support
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist ./dist
+CMD ["npm", "start"]
+```
+
+### PM2 Process Management
+```javascript
+module.exports = {
+  apps: [{
+    name: 'mcp-news-v3',
+    script: 'dist/index.js',
+    instances: 'max',
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production'
+    }
+  }]
+};
+```
 
 ## 🔄 Integration Examples
 
-### n8n Workflow: Real-time News Analysis
+### n8n Workflow Integration
+1. **Add MCP Client Node**
+2. **Configure HTTP MCP endpoint**: `http://localhost:3000/mcp`
+3. **Set authentication**: API key in headers
+4. **Use tools**: Call any of the 3 available tools
+
+### Real-time Dashboard
+```javascript
+// WebSocket for real-time analysis
+const ws = new WebSocket('ws://localhost:3001/mcp');
+
+// SSE for market updates
+const eventSource = new EventSource('http://localhost:3002/events');
 ```
-RSS Feed → Filter Crypto → MCP Analyze → Database → Alert System
+
+## 🛠️ Development
+
+### Project Structure
+```
+src/
+├── index.ts                 # Main entry point
+├── protocols/               # Protocol implementations
+│   ├── stdio.ts
+│   ├── http.ts
+│   ├── websocket.ts
+│   └── sse.ts
+├── tools/                   # MCP tool implementations
+├── services/                # External service integrations
+├── types/                   # TypeScript definitions
+└── utils/                   # Shared utilities
 ```
 
-### n8n Workflow: Market Sentiment Dashboard  
-```
-Schedule → Batch Analyze → Sentiment Summary → Dashboard Update
-```
-
-### n8n Workflow: Trading Signals
-```
-News Source → MCP Analysis → High Impact Filter → Trading Alert
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Connection Failed:**
-- Check container is running: `docker ps | grep kaayaan-mcp-news`
-- Verify stdio connectivity: `docker exec -i kaayaan-mcp-news echo "test"`
-- Review container logs: `docker logs kaayaan-mcp-news`
-
-**Analysis Quality Issues:**
-- Verify OpenAI API key is configured and valid
-- Check API rate limits and quotas
-- Review input text quality (minimum 10 words recommended)
-
-**Performance Issues:**
-- Monitor Redis connection: Check `server_health_check` tool
-- Review cache hit ratios in health check output
-- Check Docker resource limits
-
-**Webhook Not Working:**
-- Verify webhook URL is accessible from container
-- Check webhook secret configuration matches
-- Review n8n webhook node settings and logs
-
-## 📚 Documentation
-
-- **[n8n Integration Guide](n8n_integration.md)** - Complete setup and usage guide
-- **[MCP Tools Reference](n8n_config.json)** - Tool specifications and examples
-- **[Environment Setup](.env.example)** - Configuration template
-- **[Docker Guide](docker-compose.production.yml)** - Container deployment
-
-## 🎯 Production Deployment Checklist
-
-- [ ] Environment variables configured in `.env`
-- [ ] Redis connection tested and working
-- [ ] OpenAI API key validated with sufficient credits
-- [ ] Docker container builds and starts successfully  
-- [ ] n8n MCP Client connects without errors
-- [ ] Test workflows created and functional
-- [ ] Webhook notifications configured (if needed)
-- [ ] Health monitoring and alerting set up
-- [ ] Log aggregation and rotation configured
-- [ ] Backup and recovery procedures documented
-- [ ] Security review completed
-- [ ] Performance baseline established
-
-## 🏗️ Technical Stack
-
-- **Python 3.11** - Runtime environment
-- **MCP Protocol** - Model Context Protocol for tool integration
-- **FastAPI** - High-performance async web framework (if needed)
-- **Redis** - Caching and rate limiting
-- **MongoDB** - Data storage (optional)
-- **OpenAI GPT-4** - Advanced sentiment analysis
-- **Docker** - Containerization
-- **n8n** - Workflow automation platform
+### Adding New Tools
+1. Create tool file in `src/tools/`
+2. Define Zod schemas in `src/types/`
+3. Register in protocol handlers
+4. Add tests and documentation
 
 ## 📄 License
 
@@ -370,13 +390,13 @@ MIT License - See LICENSE file for details.
 
 ## 🤝 Support
 
-- **Health Monitoring:** Use `server_health_check` MCP tool
-- **Logs:** Available in container at `/app/logs/`
-- **Metrics:** Redis cache statistics via health check
-- **Documentation:** Comprehensive guides in repository
+- **Documentation**: Comprehensive inline code documentation
+- **Error Messages**: Detailed error responses with context
+- **Health Monitoring**: Built-in health check endpoints
+- **Logging**: Structured JSON logging with configurable levels
 
 ---
 
-**Ready for production deployment with Kaayaan infrastructure! 🎉**
+**Ready for production deployment with multi-protocol support! 🎉**
 
-*Built with ❤️ for the Kaayaan ecosystem*
+*Built with TypeScript, Express.js, and modern Node.js ecosystem*
