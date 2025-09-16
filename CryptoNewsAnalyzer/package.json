@@ -1,0 +1,51 @@
+{
+  "name": "crypto-news-analyzer",
+  "version": "1.0.0",
+  "description": "Real-time cryptocurrency news analysis with sentiment analysis and trading signals",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "NODE_ENV=development node index.js",
+    "test": "node test.js",
+    "security-check": "node security-check.js",
+    "security-audit": "npm audit",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "cryptocurrency",
+    "news",
+    "sentiment-analysis",
+    "trading-signals",
+    "openai",
+    "newsapi",
+    "mongodb",
+    "express"
+  ],
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "axios": "^1.12.0",
+    "mongodb": "^6.19.0",
+    "openai": "^4.104.0",
+    "dotenv": "^16.6.0",
+    "helmet": "^7.2.0",
+    "express-rate-limit": "^7.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaayaan-ai/crypto-news-analyzer.git"
+  },
+  "homepage": "https://github.com/kaayaan-ai/crypto-news-analyzer#readme",
+  "bugs": {
+    "url": "https://github.com/kaayaan-ai/crypto-news-analyzer/issues"
+  },
+  "author": "Kaayaan AI",
+  "license": "MIT"
+}
