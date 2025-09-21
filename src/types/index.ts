@@ -212,6 +212,29 @@ export interface CacheService {
 }
 
 // ===================================
+// OpenAI Service Types
+// ===================================
+
+export interface OpenAIService {
+  chat: {
+    completions: {
+      create: (params: unknown) => Promise<unknown>;
+    };
+  };
+}
+
+// ===================================
+// Tool Types
+// ===================================
+
+export interface Tool {
+  name: string;
+  description: string;
+  inputSchema: object;
+  execute: (params: unknown) => Promise<unknown>;
+}
+
+// ===================================
 // Rate Limiter Types
 // ===================================
 

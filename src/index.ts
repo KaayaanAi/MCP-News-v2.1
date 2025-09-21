@@ -1,111 +1,85 @@
 #!/usr/bin/env node
 
 /**
- * MCP-NEWS-V3 - Universal MCP Server
- * Main entry point that initializes and runs all protocols simultaneously
+ * MCP-NEWS-V2.1 - Official MCP Server Implementation
+ * Main entry point supporting both STDIO (MCP standard) and HTTP (n8n compatible)
  */
 
 import { config } from 'dotenv';
 import process from 'process';
-import type {
-  ServerConfig,
-  Logger,
-  CacheService,
-  RateLimiter,
-  ProtocolHandler,
-  HealthCheckResponse,
-  ToolHandler
-} from './types/index.js';
-import { EnvSchema } from './types/index.js';
+import { z } from 'zod';
 import { getLogger } from './utils/logger.js';
-import { createCacheService } from './services/cache_service.js';
-import { initializeRateLimiter } from './services/rate_limiter.js';
-import { createOpenAIService } from './services/openai_service.js';
-import { createAnalyzeCryptoSentimentTool } from './tools/analyze_crypto_sentiment.js';
-import { createGetMarketNewsTool } from './tools/get_market_news.js';
-import { createValidateNewsSourceTool } from './tools/validate_news_source.js';
-import { createStdioHandler } from './protocols/stdio.js';
-import { createHttpHandler } from './protocols/http.js';
-import { createWebSocketHandler } from './protocols/websocket.js';
-import { createSSEHandler } from './protocols/sse.js';
+import { MCPNewsServer } from './mcp-server.js';
+import { HttpMCPServer } from './http-server.js';
+import type { Logger } from './types/index.js';
+
+// Environment configuration schema
+const EnvSchema = z.object({
+  NODE_ENV: z.string().default('development'),
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
+  SERVER_MODE: z.enum(['stdio', 'http', 'both']).default('both'),
+  HTTP_PORT: z.coerce.number().default(4009),
+  API_KEY: z.string().optional(),
+  PRETTY_LOGS: z.coerce.boolean().default(true),
+});
 
 /**
- * Universal MCP Server class
+ * Universal MCP Server Manager
+ * Manages both STDIO and HTTP MCP servers based on configuration
  */
 class UniversalMCPServer {
   private logger: Logger;
-  private config: ServerConfig;
-  private cache: CacheService | null = null;
-  private rateLimiter: RateLimiter | null = null;
-  private protocolHandlers: Map<string, ProtocolHandler> = new Map();
+  private config: z.infer<typeof EnvSchema>;
+  private mcpServer: MCPNewsServer | null = null;
+  private httpServer: HttpMCPServer | null = null;
   private isRunning = false;
-  private startTime = 0;
 
   constructor() {
     // Load environment configuration
     config();
-
-    // Parse and validate environment variables
-    const env = EnvSchema.parse(process.env);
-
-    this.config = {
-      nodeEnv: env.NODE_ENV,
-      logLevel: env.LOG_LEVEL,
-      httpPort: env.HTTP_PORT,
-      websocketPort: env.WEBSOCKET_PORT,
-      ssePort: env.SSE_PORT,
-      stdioEnabled: env.STDIO_ENABLED,
-      apiKey: env.API_KEY,
-      corsOrigins: env.CORS_ORIGINS.split(',').map(s => s.trim()),
-      rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
-      rateLimitMaxRequests: env.RATE_LIMIT_MAX_REQUESTS,
-      openaiApiKey: env.OPENAI_API_KEY,
-      openaiModel: env.OPENAI_MODEL,
-      openaiMaxCompletionTokens: env.OPENAI_MAX_COMPLETION_TOKENS,
-      openaiTemperature: env.OPENAI_TEMPERATURE,
-      redisUrl: env.REDIS_URL,
-      cacheTtlSeconds: env.CACHE_TTL_SECONDS,
-      enableCache: env.ENABLE_CACHE,
-      prettyLogs: env.PRETTY_LOGS,
-      mockExternalApis: env.MOCK_EXTERNAL_APIS,
-    };
+    this.config = EnvSchema.parse(process.env);
 
     // Initialize logger
     this.logger = getLogger({
-      level: this.config.logLevel,
-      pretty: this.config.prettyLogs,
-      service: 'mcp-news-v3'
+      level: this.config.LOG_LEVEL,
+      pretty: this.config.PRETTY_LOGS,
+      service: 'mcp-news-universal'
     });
 
-    this.logger.info('Universal MCP Server initializing', {
-      nodeEnv: this.config.nodeEnv,
-      protocols: this.getEnabledProtocols(),
-      hasOpenAI: !!this.config.openaiApiKey,
-      hasRedis: !!this.config.redisUrl,
+    this.logger.info('Universal MCP Server Manager initializing', {
+      nodeEnv: this.config.NODE_ENV,
+      serverMode: this.config.SERVER_MODE,
+      httpPort: this.config.HTTP_PORT,
     });
   }
 
   /**
-   * Start the server with all enabled protocols
+   * Start the server based on configuration
    */
   async start(): Promise<void> {
     try {
-      this.startTime = Date.now();
+      const promises: Promise<void>[] = [];
 
-      // Initialize core services
-      await this.initializeServices();
+      // Start STDIO MCP server (for Claude Desktop and direct MCP clients)
+      if (this.config.SERVER_MODE === 'stdio' || this.config.SERVER_MODE === 'both') {
+        this.mcpServer = new MCPNewsServer();
+        promises.push(this.mcpServer.start());
+        this.logger.info('Starting STDIO MCP server');
+      }
 
-      // Initialize tools
-      await this.initializeTools();
+      // Start HTTP MCP server (for n8n and web clients)
+      if (this.config.SERVER_MODE === 'http' || this.config.SERVER_MODE === 'both') {
+        this.httpServer = new HttpMCPServer();
+        promises.push(this.httpServer.start());
+        this.logger.info('Starting HTTP MCP server', { port: this.config.HTTP_PORT });
+      }
 
-      // Start protocol handlers
-      await this.startProtocols();
+      // Wait for all servers to start
+      await Promise.all(promises);
 
       this.isRunning = true;
-
       this.logger.info('Universal MCP Server started successfully', {
-        protocols: Array.from(this.protocolHandlers.keys()),
-        uptime: 0,
+        mode: this.config.SERVER_MODE,
         pid: process.pid,
       });
 
@@ -120,7 +94,7 @@ class UniversalMCPServer {
   }
 
   /**
-   * Stop the server and all protocols
+   * Stop all servers
    */
   async stop(): Promise<void> {
     if (!this.isRunning) {
@@ -130,241 +104,27 @@ class UniversalMCPServer {
     this.logger.info('Stopping Universal MCP Server');
 
     try {
-      // Stop all protocol handlers
-      const stopPromises = Array.from(this.protocolHandlers.values()).map(handler =>
-        handler.stop().catch(error =>
-          this.logger.error(`Error stopping ${handler.getType()} protocol`, error)
-        )
-      );
+      const stopPromises: Promise<void>[] = [];
 
+      // Stop STDIO MCP server
+      if (this.mcpServer) {
+        stopPromises.push(this.mcpServer.stop());
+      }
+
+      // Stop HTTP MCP server
+      if (this.httpServer) {
+        stopPromises.push(this.httpServer.stop());
+      }
+
+      // Wait for all servers to stop
       await Promise.all(stopPromises);
 
-      // Cleanup services
-      // Note: Cache service cleanup would go here if needed
-
       this.isRunning = false;
-      const uptime = Date.now() - this.startTime;
-
-      this.logger.info('Universal MCP Server stopped', {
-        uptime: Math.floor(uptime / 1000),
-      });
+      this.logger.info('Universal MCP Server stopped successfully');
 
     } catch (error) {
       this.logger.error('Error during server shutdown', error);
     }
-  }
-
-  /**
-   * Initialize core services (cache, rate limiter, etc.)
-   */
-  private async initializeServices(): Promise<void> {
-    this.logger.info('Initializing core services');
-
-    // Initialize cache service
-    if (this.config.enableCache) {
-      this.cache = await createCacheService(this.config.redisUrl, this.logger);
-      this.logger.info('Cache service initialized', {
-        type: this.cache.isConnected() ? 'redis' : 'memory'
-      });
-    }
-
-    // Initialize rate limiter
-    if (this.cache) {
-      this.rateLimiter = initializeRateLimiter(
-        this.cache,
-        this.logger,
-        {
-          windowMs: this.config.rateLimitWindowMs,
-          maxRequests: this.config.rateLimitMaxRequests,
-        }
-      );
-      this.logger.info('Rate limiter initialized');
-    }
-  }
-
-  /**
-   * Initialize and register MCP tools
-   */
-  private async initializeTools(): Promise<void> {
-    this.logger.info('Initializing MCP tools');
-
-    if (!this.config.openaiApiKey) {
-      this.logger.warn('OpenAI API key not provided - tools will have limited functionality');
-    }
-
-    // Initialize OpenAI service
-    const openaiService = createOpenAIService(
-      {
-        apiKey: this.config.openaiApiKey || '',
-        model: this.config.openaiModel,
-        maxCompletionTokens: this.config.openaiMaxCompletionTokens,
-        temperature: this.config.openaiTemperature,
-      },
-      this.logger
-    );
-
-    // Test OpenAI connection if key is provided
-    if (this.config.openaiApiKey) {
-      const healthCheck = await openaiService.testConnection();
-      if (!healthCheck.success) {
-        this.logger.warn('OpenAI connection test failed', {
-          error: healthCheck.error
-        });
-      } else {
-        this.logger.info('OpenAI connection verified');
-      }
-    }
-
-    // Initialize tools
-    const tools = [
-      {
-        name: 'analyze_crypto_sentiment',
-        handler: createAnalyzeCryptoSentimentTool(
-          openaiService,
-          this.cache || await createCacheService(undefined, this.logger),
-          this.logger,
-          { cacheTtlSeconds: this.config.cacheTtlSeconds }
-        )
-      },
-      {
-        name: 'get_market_news',
-        handler: createGetMarketNewsTool(
-          this.cache || await createCacheService(undefined, this.logger),
-          this.logger,
-          {
-            cacheTtlSeconds: this.config.cacheTtlSeconds,
-            mockMode: this.config.mockExternalApis,
-            newsApiKey: process.env.NEWS_API_KEY,
-            cryptoPanicApiKey: process.env.CRYPTO_PANIC_API_KEY,
-          }
-        )
-      },
-      {
-        name: 'validate_news_source',
-        handler: createValidateNewsSourceTool(
-          this.cache || await createCacheService(undefined, this.logger),
-          this.logger,
-          {
-            cacheTtlSeconds: this.config.cacheTtlSeconds,
-            mockMode: this.config.mockExternalApis,
-          }
-        )
-      }
-    ];
-
-    // Register tools with all protocol handlers
-    this.tools = new Map(tools.map(tool => [
-      tool.name,
-      {
-        definition: tool.handler.getDefinition(),
-        execute: tool.handler.execute.bind(tool.handler)
-      }
-    ]));
-
-    this.logger.info('MCP tools initialized', {
-      toolCount: tools.length,
-      toolNames: tools.map(t => t.name)
-    });
-  }
-
-  private tools = new Map<string, ToolHandler>();
-
-  /**
-   * Start all enabled protocol handlers
-   */
-  private async startProtocols(): Promise<void> {
-    this.logger.info('Starting protocol handlers');
-
-    const protocolPromises: Promise<void>[] = [];
-
-    // STDIO Protocol (if enabled)
-    if (this.config.stdioEnabled) {
-      const stdioHandler = createStdioHandler(this.logger);
-
-      // Register tools
-      this.tools.forEach((toolHandler, name) => {
-        stdioHandler.registerTool(name, toolHandler);
-      });
-
-      protocolPromises.push(
-        stdioHandler.start().then(() => {
-          this.protocolHandlers.set('stdio', stdioHandler);
-          this.logger.info('STDIO protocol started');
-        })
-      );
-    }
-
-    // HTTP Protocol (if port is set)
-    if (this.config.httpPort > 0) {
-      const httpHandler = createHttpHandler(
-        {
-          port: this.config.httpPort,
-          corsOrigins: this.config.corsOrigins,
-          apiKey: this.config.apiKey,
-          rateLimiter: this.rateLimiter || undefined,
-        },
-        this.logger
-      );
-
-      // Register tools
-      this.tools.forEach((toolHandler, name) => {
-        httpHandler.registerTool(name, toolHandler);
-      });
-
-      protocolPromises.push(
-        httpHandler.start().then(() => {
-          this.protocolHandlers.set('http', httpHandler);
-          this.logger.info('HTTP protocol started', { port: this.config.httpPort });
-        })
-      );
-    }
-
-    // WebSocket Protocol (if port is set)
-    if (this.config.websocketPort > 0) {
-      const wsHandler = createWebSocketHandler(
-        {
-          port: this.config.websocketPort,
-          apiKey: this.config.apiKey,
-          rateLimiter: this.rateLimiter || undefined,
-        },
-        this.logger
-      );
-
-      // Register tools
-      this.tools.forEach((toolHandler, name) => {
-        wsHandler.registerTool(name, toolHandler);
-      });
-
-      protocolPromises.push(
-        wsHandler.start().then(() => {
-          this.protocolHandlers.set('websocket', wsHandler);
-          this.logger.info('WebSocket protocol started', { port: this.config.websocketPort });
-        })
-      );
-    }
-
-    // SSE Protocol (if port is set)
-    if (this.config.ssePort > 0) {
-      const sseHandler = createSSEHandler(
-        {
-          port: this.config.ssePort,
-          corsOrigins: this.config.corsOrigins,
-          apiKey: this.config.apiKey,
-          rateLimiter: this.rateLimiter || undefined,
-        },
-        this.logger
-      );
-
-      protocolPromises.push(
-        sseHandler.start().then(() => {
-          this.protocolHandlers.set('sse', sseHandler);
-          this.logger.info('SSE protocol started', { port: this.config.ssePort });
-        })
-      );
-    }
-
-    // Wait for all protocols to start
-    await Promise.all(protocolPromises);
   }
 
   /**
@@ -396,94 +156,6 @@ class UniversalMCPServer {
       process.exit(1);
     });
   }
-
-  /**
-   * Get list of enabled protocols
-   */
-  private getEnabledProtocols(): string[] {
-    const protocols: string[] = [];
-
-    if (this.config.stdioEnabled) protocols.push('stdio');
-    if (this.config.httpPort > 0) protocols.push('http');
-    if (this.config.websocketPort > 0) protocols.push('websocket');
-    if (this.config.ssePort > 0) protocols.push('sse');
-
-    return protocols;
-  }
-
-  /**
-   * Get current server health status
-   */
-  async getHealthStatus(): Promise<HealthCheckResponse> {
-    const uptime = this.isRunning ? Date.now() - this.startTime : 0;
-    const memoryUsage = process.memoryUsage();
-
-    // Check protocol statuses
-    const protocolStatuses: Record<string, boolean> = {};
-    this.protocolHandlers.forEach((handler, name) => {
-      protocolStatuses[name] = handler.isRunning();
-    });
-
-    // Check service statuses
-    const openaiStatus = this.config.openaiApiKey ? 'connected' : 'disconnected';
-    const cacheStatus = this.cache?.isConnected() ? 'connected' : 'disconnected';
-
-    return {
-      status: this.isRunning ? 'healthy' : 'unhealthy',
-      timestamp: new Date().toISOString(),
-      uptime: Math.floor(uptime / 1000),
-      version: '3.0.0',
-      protocols: {
-        stdio: this.config.stdioEnabled && (protocolStatuses.stdio || false),
-        http: this.config.httpPort > 0 && (protocolStatuses.http || false),
-        websocket: this.config.websocketPort > 0 && (protocolStatuses.websocket || false),
-        sse: this.config.ssePort > 0 && (protocolStatuses.sse || false),
-      },
-      services: {
-        openai: openaiStatus as 'connected' | 'disconnected' | 'error',
-        cache: cacheStatus as 'connected' | 'disconnected' | 'error',
-      },
-      performance: {
-        memoryUsageMB: Math.round(memoryUsage.rss / 1024 / 1024),
-        cacheHitRatio: undefined, // Could be implemented with cache statistics
-        averageResponseTimeMs: undefined, // Could be implemented with metrics collection
-      },
-    };
-  }
-
-  /**
-   * Get current server status info
-   */
-  getStatus(): {
-    isRunning: boolean;
-    uptime: number;
-    protocols: Record<string, boolean>;
-    toolCount: number;
-    config: Partial<ServerConfig>;
-  } {
-    const uptime = this.isRunning ? Date.now() - this.startTime : 0;
-
-    return {
-      isRunning: this.isRunning,
-      uptime: Math.floor(uptime / 1000),
-      protocols: {
-        stdio: this.protocolHandlers.has('stdio'),
-        http: this.protocolHandlers.has('http'),
-        websocket: this.protocolHandlers.has('websocket'),
-        sse: this.protocolHandlers.has('sse'),
-      },
-      toolCount: this.tools.size,
-      config: {
-        nodeEnv: this.config.nodeEnv,
-        httpPort: this.config.httpPort,
-        websocketPort: this.config.websocketPort,
-        ssePort: this.config.ssePort,
-        stdioEnabled: this.config.stdioEnabled,
-        apiKey: this.config.apiKey,
-        corsOrigins: this.config.corsOrigins,
-      },
-    };
-  }
 }
 
 /**
@@ -494,12 +166,14 @@ async function main(): Promise<void> {
     const server = new UniversalMCPServer();
     await server.start();
 
-    // Keep the process alive
-    process.stdin.resume();
+    // Keep the process alive for STDIO mode
+    if (process.stdin.readable) {
+      process.stdin.resume();
+    }
 
   } catch (error) {
-    // Fatal error during server startup - create minimal logger for error reporting
-    const logger = getLogger({ level: 'error', pretty: true, service: 'mcp-news-v3' });
+    // Fatal error during server startup
+    const logger = getLogger({ level: 'error', pretty: true, service: 'mcp-news-universal' });
     logger.error('Fatal error starting server', error);
     process.exit(1);
   }
@@ -508,11 +182,11 @@ async function main(): Promise<void> {
 // Start the server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
-    // Unhandled error in main - create minimal logger for error reporting
-    const logger = getLogger({ level: 'error', pretty: true, service: 'mcp-news-v3' });
+    // Unhandled error in main
+    const logger = getLogger({ level: 'error', pretty: true, service: 'mcp-news-universal' });
     logger.error('Unhandled error in main', error);
     process.exit(1);
   });
 }
 
-export { UniversalMCPServer };
+export { UniversalMCPServer, MCPNewsServer, HttpMCPServer };

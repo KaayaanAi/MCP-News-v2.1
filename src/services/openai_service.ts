@@ -7,10 +7,11 @@ import OpenAI from 'openai';
 import type { Logger, ServiceResponse } from '../types/index.js';
 
 interface OpenAIConfig {
-  apiKey: string;
+  apiKey?: string;
   model: string;
   maxCompletionTokens: number;
   temperature: number;
+  mockMode?: boolean;
 }
 
 interface SentimentAnalysisRequest {
@@ -32,27 +33,32 @@ interface SentimentAnalysisResult {
  * OpenAI service for cryptocurrency sentiment analysis
  */
 export class OpenAIService {
-  private client: OpenAI;
+  private client: OpenAI | null;
   private config: OpenAIConfig;
   private logger: Logger;
+  private mockMode: boolean;
 
   constructor(config: OpenAIConfig, logger: Logger) {
     this.config = config;
     this.logger = logger.child({ component: 'OpenAIService' });
+    this.mockMode = config.mockMode || !config.apiKey;
 
-    if (!config.apiKey) {
-      throw new Error('OpenAI API key is required');
+    if (this.mockMode) {
+      this.client = null;
+      this.logger.info('OpenAI service initialized in mock mode', {
+        reason: config.mockMode ? 'explicitly enabled' : 'no API key provided',
+        model: config.model,
+      });
+    } else {
+      this.client = new OpenAI({
+        apiKey: config.apiKey!,
+      });
+      this.logger.info('OpenAI service initialized', {
+        model: config.model,
+        maxCompletionTokens: config.maxCompletionTokens,
+        temperature: config.temperature,
+      });
     }
-
-    this.client = new OpenAI({
-      apiKey: config.apiKey,
-    });
-
-    this.logger.info('OpenAI service initialized', {
-      model: config.model,
-      maxCompletionTokens: config.maxCompletionTokens,
-      temperature: config.temperature,
-    });
   }
 
   /**
@@ -69,7 +75,16 @@ export class OpenAIService {
         source: request.source,
         coins: request.coins,
         depth: request.analysisDepth,
+        mockMode: this.mockMode,
       });
+
+      if (this.mockMode) {
+        return this.generateMockAnalysis(request, startTime);
+      }
+
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized');
+      }
 
       const prompt = this.buildSentimentPrompt(request);
 
@@ -132,10 +147,86 @@ export class OpenAIService {
   }
 
   /**
+   * Generate mock sentiment analysis for testing/demo purposes
+   */
+  private generateMockAnalysis(
+    request: SentimentAnalysisRequest,
+    startTime: number
+  ): ServiceResponse<SentimentAnalysisResult> {
+    const { content, coins } = request;
+
+    // Simple keyword-based mock analysis
+    const positiveKeywords = ['bullish', 'positive', 'growth', 'up', 'gain', 'rise', 'buy', 'strong'];
+    const negativeKeywords = ['bearish', 'negative', 'drop', 'down', 'fall', 'sell', 'weak', 'crash'];
+
+    const contentLower = content.toLowerCase();
+    const positiveCount = positiveKeywords.filter(word => contentLower.includes(word)).length;
+    const negativeCount = negativeKeywords.filter(word => contentLower.includes(word)).length;
+
+    let impact: 'Positive' | 'Negative' | 'Neutral';
+    let confidence: number;
+
+    if (positiveCount > negativeCount) {
+      impact = 'Positive';
+      confidence = Math.min(60 + positiveCount * 10, 85);
+    } else if (negativeCount > positiveCount) {
+      impact = 'Negative';
+      confidence = Math.min(60 + negativeCount * 10, 85);
+    } else {
+      impact = 'Neutral';
+      confidence = 50;
+    }
+
+    const responseTime = Date.now() - startTime;
+
+    this.logger.info('Mock sentiment analysis completed', {
+      impact,
+      confidence,
+      responseTimeMs: responseTime,
+    });
+
+    return {
+      success: true,
+      data: {
+        impact,
+        confidence_score: confidence,
+        summary: `Mock analysis: ${impact} sentiment detected in content about ${coins.join(', ')}`,
+        affected_coins: coins,
+        reasoning: `Mock analysis based on keyword detection (${positiveCount} positive, ${negativeCount} negative keywords found)`,
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        responseTimeMs: responseTime,
+      },
+    };
+  }
+
+  /**
    * Test OpenAI connection and availability
    */
   async testConnection(): Promise<ServiceResponse<{ status: string; model: string }>> {
     const startTime = Date.now();
+
+    if (this.mockMode) {
+      const responseTime = Date.now() - startTime;
+      this.logger.info('Mock OpenAI connection test', { responseTimeMs: responseTime });
+
+      return {
+        success: true,
+        data: {
+          status: 'mock_mode',
+          model: this.config.model + ' (mock)',
+        },
+        metadata: {
+          timestamp: new Date().toISOString(),
+          responseTimeMs: responseTime,
+        },
+      };
+    }
+
+    if (!this.client) {
+      throw new Error('OpenAI client not initialized');
+    }
 
     try {
       await this.client.chat.completions.create({
@@ -319,6 +410,7 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
         status: testResult.success ? 'connected' : 'error',
         details: {
           model: this.config.model,
+          mockMode: this.mockMode,
           lastTest: testResult.metadata.timestamp,
           responseTime: testResult.metadata.responseTimeMs,
           error: testResult.error,
@@ -330,6 +422,7 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
         details: {
           error: error instanceof Error ? error.message : String(error),
           model: this.config.model,
+          mockMode: this.mockMode,
         },
       };
     }

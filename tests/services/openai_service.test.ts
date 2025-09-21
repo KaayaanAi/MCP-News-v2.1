@@ -66,10 +66,16 @@ describe('OpenAIService', () => {
       );
     });
 
-    it('should throw error when API key is missing', () => {
-      expect(() => {
-        new OpenAIService({ ...defaultConfig, apiKey: '' }, mockLogger);
-      }).toThrow('OpenAI API key is required');
+    it('should initialize in mock mode when API key is missing', () => {
+      const service = new OpenAIService({ ...defaultConfig, apiKey: '' }, mockLogger);
+
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'OpenAI service initialized in mock mode',
+        {
+          reason: 'no API key provided',
+          model: 'gpt-4',
+        }
+      );
     });
 
     it('should handle gpt-5-nano model temperature override', () => {
@@ -282,6 +288,7 @@ describe('OpenAIService', () => {
           source: sampleRequest.source,
           coins: sampleRequest.coins,
           depth: sampleRequest.analysisDepth,
+          mockMode: false,
         }
       );
 
@@ -544,6 +551,7 @@ describe('OpenAIService', () => {
       expect(health.status).toBe('connected');
       expect(health.details).toEqual({
         model: 'gpt-4',
+        mockMode: false,
         lastTest: expect.any(String),
         responseTime: expect.any(Number),
         error: undefined,
