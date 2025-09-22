@@ -19,7 +19,7 @@ import { z } from 'zod';
 import type { Logger, Tool as _MCPTool, OpenAIService, CacheService } from './types/index.js';
 import { getLogger } from './utils/logger.js';
 import { createCacheService } from './services/cache_service.js';
-import { createOpenAIService } from './services/openai_service.js';
+import { createOpenAIService } from './services/gemini_service.js';
 import { createAnalyzeCryptoSentimentTool } from './tools/analyze_crypto_sentiment.js';
 import { createGetMarketNewsTool } from './tools/get_market_news.js';
 import { createValidateNewsSourceTool } from './tools/validate_news_source.js';
@@ -28,10 +28,10 @@ import { createValidateNewsSourceTool } from './tools/validate_news_source.js';
 const EnvSchema = z.object({
   NODE_ENV: z.string().default('development'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4'),
-  OPENAI_MAX_COMPLETION_TOKENS: z.coerce.number().default(1000),
-  OPENAI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash-exp'),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().default(1000),
+  GEMINI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
   REDIS_URL: z.string().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().default(300),
   ENABLE_CACHE: z.coerce.boolean().default(true),
@@ -80,9 +80,16 @@ export class MCPNewsServer {
     this.logger.info('MCP News Server initialized', {
       version: '2.1.0',
       nodeEnv: this.config.NODE_ENV,
-      hasOpenAI: !!this.config.OPENAI_API_KEY,
+      hasGemini: !!this.config.GEMINI_API_KEY,
       hasRedis: !!this.config.REDIS_URL,
     });
+  }
+
+  /**
+   * Get logger instance for external access
+   */
+  get loggerInstance(): Logger {
+    return this.logger;
   }
 
   /**
@@ -147,7 +154,7 @@ export class MCPNewsServer {
         }
 
         try {
-          const result = await tool.execute(args || {});
+          const result = await (tool.execute as (params: unknown) => Promise<unknown>)(args || {});
 
           return {
             content: [
@@ -183,37 +190,37 @@ export class MCPNewsServer {
       });
     }
 
-    // Initialize OpenAI service
+    // Initialize Gemini service
     const openaiService = createOpenAIService(
       {
-        apiKey: this.config.OPENAI_API_KEY || '',
-        model: this.config.OPENAI_MODEL,
-        maxCompletionTokens: this.config.OPENAI_MAX_COMPLETION_TOKENS,
-        temperature: this.config.OPENAI_TEMPERATURE,
+        apiKey: this.config.GEMINI_API_KEY || '',
+        model: this.config.GEMINI_MODEL,
+        maxOutputTokens: this.config.GEMINI_MAX_OUTPUT_TOKENS,
+        temperature: this.config.GEMINI_TEMPERATURE,
       },
       this.logger
     );
 
-    // Test OpenAI connection if key is provided
-    if (this.config.OPENAI_API_KEY) {
+    // Test Gemini connection if key is provided
+    if (this.config.GEMINI_API_KEY) {
       const healthCheck = await openaiService.testConnection();
       if (!healthCheck.success) {
-        this.logger.warn('OpenAI connection test failed', {
+        this.logger.warn('Gemini connection test failed', {
           error: healthCheck.error
         });
       } else {
-        this.logger.info('OpenAI connection verified');
+        this.logger.info('Gemini connection verified');
       }
     }
 
     // Initialize tools with proper MCP schemas
-    await this.initializeTools(openaiService);
+    await this.initializeTools(openaiService as any);
   }
 
   /**
    * Initialize and register MCP tools with proper schemas
    */
-  private async initializeTools(openaiService: OpenAIService): Promise<void> {
+  private async initializeTools(openaiService: any): Promise<void> {
     this.logger.info('Initializing MCP tools');
 
     // Create cache service for tools if not already available
@@ -221,7 +228,7 @@ export class MCPNewsServer {
 
     // Initialize analyze_crypto_sentiment tool
     const sentimentTool = createAnalyzeCryptoSentimentTool(
-      openaiService,
+      openaiService as any,
       toolCache,
       this.logger,
       { cacheTtlSeconds: this.config.CACHE_TTL_SECONDS }
@@ -415,7 +422,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   // Start the server
   server.start().catch((error) => {
-    console.error('Fatal error starting MCP server:', error);
+    // Use server's logger if available, fallback to console for fatal startup errors
+    try {
+      server.loggerInstance?.error('Fatal error starting MCP server', error);
+    } catch {
+      console.error('Fatal error starting MCP server:', error);
+    }
     process.exit(1);
   });
 }

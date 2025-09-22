@@ -190,12 +190,6 @@ class MemoryCacheService implements CacheService {
     return true; // Memory cache is always "connected"
   }
 
-  destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-    this.cache.clear();
-  }
 
   private cleanupExpired(): void {
     const now = Date.now();
@@ -213,21 +207,6 @@ class MemoryCacheService implements CacheService {
     }
   }
 
-  getCacheStats(): { size: number; expired: number } {
-    const now = Date.now();
-    let expired = 0;
-
-    for (const entry of this.cache.values()) {
-      if (entry.expires && now > entry.expires) {
-        expired++;
-      }
-    }
-
-    return {
-      size: this.cache.size,
-      expired,
-    };
-  }
 }
 
 /**

@@ -361,7 +361,7 @@ Initialize the MCP connection and get server capabilities.
     },
     "serverInfo": {
       "name": "mcp-news-server",
-      "version": "2.1.1"
+      "version": "2.1.2"
     }
   },
   "id": 1
@@ -583,7 +583,7 @@ No authentication required - secured by process isolation.
   "status": "healthy",
   "timestamp": "2025-09-21T15:30:00Z",
   "uptime": 3600,
-  "version": "2.1.1",
+  "version": "2.1.2",
   "memory": {
     "rss": 128,
     "heapUsed": 64,
@@ -599,7 +599,7 @@ No authentication required - secured by process isolation.
     "hit_ratio": 0.85
   },
   "external_services": {
-    "openai": "connected",
+    "gemini": "connected",
     "news_apis": "partial"
   }
 }
@@ -637,7 +637,7 @@ No authentication required - secured by process isolation.
 Default limits (configurable):
 - **HTTP requests**: 100 per minute per IP
 - **Tool executions**: No limit (controlled by processing time)
-- **OpenAI API**: Respects OpenAI rate limits
+- **Gemini API**: Respects Google Gemini rate limits
 
 ### Optimization Tips
 

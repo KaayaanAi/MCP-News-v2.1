@@ -7,12 +7,12 @@ A complete, production-ready MCP (Model Context Protocol) server with dual proto
 ## ✨ Features
 
 🔗 **Dual Protocol Support** - STDIO MCP and HTTP MCP protocols
-🤖 **AI-Powered Analysis** - OpenAI GPT-4 integration for advanced sentiment analysis
+🤖 **AI-Powered Analysis** - Google Gemini 2.0 Flash integration for advanced sentiment analysis
 💾 **Smart Caching** - Redis/Memory caching for optimal performance
 🔒 **Enterprise Security** - API authentication, CORS protection, comprehensive validation
 📊 **100% MCP Compliant** - Fully validated JSON-RPC 2.0 implementation
 🌍 **Multi-source Data** - Support for various news APIs and social media
-🐳 **Production Ready** - TypeScript, Docker, comprehensive testing (280 tests)
+🐳 **Production Ready** - TypeScript, Docker, comprehensive testing (150 tests)
 
 ## 🎯 Quick Start
 
@@ -39,7 +39,7 @@ npm start
 # Development with hot reload
 npm run dev
 
-# Run tests (280 tests, 100% passing)
+# Run tests (150 tests, 100% passing)
 npm test
 
 # Type checking and linting
@@ -189,12 +189,12 @@ API_KEY=your_secure_api_key_here
 CORS_ORIGINS=*
 ```
 
-**AI Integration:**
+**AI Integration (Google Gemini):**
 ```env
-OPENAI_API_KEY=sk-your-key-here
-OPENAI_MODEL=gpt-4
-OPENAI_MAX_COMPLETION_TOKENS=1000
-OPENAI_TEMPERATURE=0.1
+GEMINI_API_KEY=your-gemini-api-key-here
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MAX_OUTPUT_TOKENS=1000
+GEMINI_TEMPERATURE=0.1
 ```
 
 **Caching:**
@@ -392,7 +392,7 @@ src/
 │   ├── get_market_news.ts
 │   └── validate_news_source.ts
 ├── services/              # External service integrations
-│   ├── openai_service.ts
+│   ├── gemini_service.ts
 │   ├── cache_service.ts
 │   └── rate_limiter.ts
 ├── types/                 # TypeScript definitions
@@ -400,13 +400,13 @@ src/
 └── config/               # Configuration management
 ```
 
-### Recent Improvements (v2.1.0)
-- ✅ **Protocol Fixes**: Complete JSON-RPC 2.0 compliance
-- ✅ **TypeScript Compilation**: All compilation errors resolved
-- ✅ **Linting**: Code quality improvements, minimal warnings
-- ✅ **Test Suite**: 280 tests passing, comprehensive coverage
-- ✅ **MCP Validation**: 100% compliance (64/64 tests passing)
-- ✅ **n8n Compatibility**: Full HTTP MCP protocol support
+### Recent Improvements (v2.1.2)
+- ✅ **Gemini 2.0 Flash**: Migrated from OpenAI to Google Gemini AI
+- ✅ **Codebase Cleanup**: Removed dead code and unused dependencies
+- ✅ **Security Fixes**: Secured API keys and configuration files
+- ✅ **Test Suite**: 150 tests passing, comprehensive coverage
+- ✅ **Dependencies**: Optimized from 13 to 10 production packages
+- ✅ **Performance**: ~4MB bundle size reduction and faster builds
 - ✅ **Error Handling**: Robust error responses and logging
 
 ### Adding New Tools

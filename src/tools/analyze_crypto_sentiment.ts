@@ -16,7 +16,7 @@ import {
   AnalyzeCryptoSentimentParamsSchema,
   AnalyzeCryptoSentimentResponseSchema
 } from '../types/index.js';
-import { OpenAIService } from '../services/openai_service.js';
+import { OpenAIService } from '../services/gemini_service.js';
 import { CacheKeys } from '../services/cache_service.js';
 
 /**

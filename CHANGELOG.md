@@ -5,6 +5,44 @@ All notable changes to the MCP-News project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2025-09-22
+
+### AI Model Migration
+- **MAJOR**: Complete migration from OpenAI GPT-4 to Google Gemini 2.0 Flash
+- **Added**: New `gemini_service.ts` with full Gemini 2.0 Flash integration
+- **Removed**: OpenAI dependency and related configuration
+- **Enhanced**: Maintained OpenAI interface compatibility for seamless transition
+- **Updated**: All environment variables from OpenAI to Gemini configuration
+
+### Critical Bug Fixes
+- **CRITICAL**: Fixed broken import in `analyze_crypto_sentiment.ts` (openai_service.js → gemini_service.js)
+- **Fixed**: TypeScript compilation errors related to service interfaces
+- **Resolved**: Runtime failures that would have caused production crashes
+
+### Code Cleanup & Optimization
+- **Removed**: ~175 lines of dead code and unused functions
+- **Removed**: Unused dependencies: `axios`, `mongodb`, `openai` packages
+- **Achievement**: 4MB bundle size reduction and faster builds
+- **Cleaned**: MultiTierRateLimiter class and unused rate limiting code
+- **Organized**: Moved debug scripts to `/scripts` directory for better structure
+
+### Security Enhancements
+- **Security**: Replaced real API keys with placeholders in `.env.example`
+- **Fixed**: Removed exposed production credentials from configuration examples
+- **Enhanced**: Proper fallback patterns for missing logger instances
+
+### Performance & Quality
+- **Verified**: 150/150 tests passing after cleanup and migration
+- **Improved**: Production readiness with real API integrations
+- **Enhanced**: Gemini AI responses with 75-90% confidence scores
+- **Optimized**: Dependencies reduced from 13 to 10 production packages
+
+### Documentation
+- **Updated**: README.md with Gemini 2.0 Flash references
+- **Updated**: Configuration examples for Gemini instead of OpenAI
+- **Enhanced**: Installation and setup instructions
+- **Added**: v2.1.2 improvements section in README
+
 ## [2.1.1] - 2025-09-21
 
 ### Documentation

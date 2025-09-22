@@ -17,7 +17,7 @@ export const HIGH_LATENCY_THRESHOLD = 5000; // milliseconds
 export const HIGH_QUALITY_SCORE_THRESHOLD = 80; // percentage
 
 // Network Configuration
-export const DEFAULT_HTTP_PORT = 3000;
+export const DEFAULT_HTTP_PORT = 4008;
 
 // Cache Configuration
 export const DEFAULT_CACHE_TTL_SECONDS = 1800; // 30 minutes

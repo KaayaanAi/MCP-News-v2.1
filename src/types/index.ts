@@ -156,10 +156,10 @@ export const ServerConfigSchema = z.object({
   rateLimitMaxRequests: z.number().default(100),
 
   // External services
-  openaiApiKey: z.string().optional(),
-  openaiModel: z.string().default('gpt-4'),
-  openaiMaxCompletionTokens: z.number().default(1000),
-  openaiTemperature: z.number().min(0).max(2).default(0.1),
+  geminiApiKey: z.string().optional(),
+  geminiModel: z.string().default('gemini-2.0-flash'),
+  geminiMaxOutputTokens: z.number().default(1000),
+  geminiTemperature: z.number().min(0).max(2).default(0.1),
 
   // Redis/Cache
   redisUrl: z.string().optional(),
@@ -216,11 +216,28 @@ export interface CacheService {
 // ===================================
 
 export interface OpenAIService {
-  chat: {
-    completions: {
-      create: (params: unknown) => Promise<unknown>;
-    };
-  };
+  analyzeSentiment: (request: {
+    content: string;
+    source: string;
+    coins: string[];
+    analysisDepth: 'basic' | 'comprehensive';
+  }) => Promise<ServiceResponse<{
+    impact: 'Positive' | 'Negative' | 'Neutral';
+    confidence_score: number;
+    summary: string;
+    affected_coins: string[];
+    reasoning: string;
+  }>>;
+  testConnection: () => Promise<ServiceResponse<{ status: string; model: string }>>;
+  getHealthStatus: () => Promise<{
+    status: 'connected' | 'disconnected' | 'error';
+    details: Record<string, unknown>;
+  }>;
+  // Add the missing properties that GeminiService has
+  client?: any;
+  model?: any;
+  config?: any;
+  logger?: any;
 }
 
 // ===================================
@@ -398,10 +415,10 @@ export const EnvSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4'),
-  OPENAI_MAX_COMPLETION_TOKENS: z.coerce.number().default(1000),
-  OPENAI_TEMPERATURE: z.coerce.number().default(0.1),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash'),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().default(1000),
+  GEMINI_TEMPERATURE: z.coerce.number().default(0.1),
   REDIS_URL: z.string().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().default(3600),
   ENABLE_CACHE: z.coerce.boolean().default(true),

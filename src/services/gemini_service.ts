@@ -1,15 +1,15 @@
 /**
- * OpenAI service for cryptocurrency sentiment analysis
+ * Gemini service for cryptocurrency sentiment analysis
  * Handles AI-powered analysis with structured prompts and error handling
  */
 
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Logger, ServiceResponse } from '../types/index.js';
 
-interface OpenAIConfig {
+interface GeminiConfig {
   apiKey?: string;
   model: string;
-  maxCompletionTokens: number;
+  maxOutputTokens: number;
   temperature: number;
   mockMode?: boolean;
 }
@@ -30,39 +30,46 @@ interface SentimentAnalysisResult {
 }
 
 /**
- * OpenAI service for cryptocurrency sentiment analysis
+ * Gemini service for cryptocurrency sentiment analysis
  */
-export class OpenAIService {
-  private client: OpenAI | null;
-  private config: OpenAIConfig;
+export class GeminiService {
+  private client: GoogleGenerativeAI | null;
+  private model: any;
+  private config: GeminiConfig;
   private logger: Logger;
   private mockMode: boolean;
 
-  constructor(config: OpenAIConfig, logger: Logger) {
+  constructor(config: GeminiConfig, logger: Logger) {
     this.config = config;
-    this.logger = logger.child({ component: 'OpenAIService' });
+    this.logger = logger.child({ component: 'GeminiService' });
     this.mockMode = config.mockMode || !config.apiKey;
 
     if (this.mockMode) {
       this.client = null;
-      this.logger.info('OpenAI service initialized in mock mode', {
+      this.model = null;
+      this.logger.info('Gemini service initialized in mock mode', {
         reason: config.mockMode ? 'explicitly enabled' : 'no API key provided',
         model: config.model,
       });
     } else {
-      this.client = new OpenAI({
-        apiKey: config.apiKey!,
-      });
-      this.logger.info('OpenAI service initialized', {
+      this.client = new GoogleGenerativeAI(config.apiKey!);
+      this.model = this.client.getGenerativeModel({
         model: config.model,
-        maxCompletionTokens: config.maxCompletionTokens,
+        generationConfig: {
+          temperature: config.temperature,
+          maxOutputTokens: config.maxOutputTokens,
+        },
+      });
+      this.logger.info('Gemini service initialized', {
+        model: config.model,
+        maxOutputTokens: config.maxOutputTokens,
         temperature: config.temperature,
       });
     }
   }
 
   /**
-   * Analyze cryptocurrency sentiment using OpenAI
+   * Analyze cryptocurrency sentiment using Gemini
    */
   async analyzeSentiment(
     request: SentimentAnalysisRequest
@@ -82,47 +89,32 @@ export class OpenAIService {
         return this.generateMockAnalysis(request, startTime);
       }
 
-      if (!this.client) {
-        throw new Error('OpenAI client not initialized');
+      if (!this.model) {
+        throw new Error('Gemini model not initialized');
       }
 
       const prompt = this.buildSentimentPrompt(request);
 
-      const completion = await this.client.chat.completions.create({
-        model: this.config.model,
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt(request.analysisDepth),
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        max_completion_tokens: this.config.maxCompletionTokens,
-        temperature: this.config.model.includes('gpt-5-nano') ? 1 : this.config.temperature,
-        response_format: { type: 'json_object' },
-      });
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const responseText = response.text();
 
-      const responseText = completion.choices[0]?.message?.content;
       if (!responseText) {
-        throw new Error('No response from OpenAI');
+        throw new Error('No response from Gemini');
       }
 
-      const result = this.parseAnalysisResult(responseText);
+      const analysisResult = this.parseAnalysisResult(responseText);
       const responseTime = Date.now() - startTime;
 
       this.logger.info('Sentiment analysis completed', {
-        impact: result.impact,
-        confidence: result.confidence_score,
+        impact: analysisResult.impact,
+        confidence: analysisResult.confidence_score,
         responseTimeMs: responseTime,
-        tokensUsed: completion.usage?.total_tokens,
       });
 
       return {
         success: true,
-        data: result,
+        data: analysisResult,
         metadata: {
           timestamp: new Date().toISOString(),
           responseTimeMs: responseTime,
@@ -202,14 +194,14 @@ export class OpenAIService {
   }
 
   /**
-   * Test OpenAI connection and availability
+   * Test Gemini connection and availability
    */
   async testConnection(): Promise<ServiceResponse<{ status: string; model: string }>> {
     const startTime = Date.now();
 
     if (this.mockMode) {
       const responseTime = Date.now() - startTime;
-      this.logger.info('Mock OpenAI connection test', { responseTimeMs: responseTime });
+      this.logger.info('Mock Gemini connection test', { responseTimeMs: responseTime });
 
       return {
         success: true,
@@ -224,26 +216,18 @@ export class OpenAIService {
       };
     }
 
-    if (!this.client) {
-      throw new Error('OpenAI client not initialized');
+    if (!this.model) {
+      throw new Error('Gemini model not initialized');
     }
 
     try {
-      await this.client.chat.completions.create({
-        model: this.config.model,
-        messages: [
-          {
-            role: 'user',
-            content: 'Hello, please respond with "OK" if you are working correctly.',
-          },
-        ],
-        max_completion_tokens: 10,
-        temperature: this.config.model.includes('gpt-5-nano') ? 1 : this.config.temperature,
-      });
+      const result = await this.model.generateContent('Hello, please respond with "OK" if you are working correctly.');
+      const response = await result.response;
+      response.text(); // Just to verify we can get text
 
       const responseTime = Date.now() - startTime;
 
-      this.logger.info('OpenAI connection test successful', {
+      this.logger.info('Gemini connection test successful', {
         responseTimeMs: responseTime,
         model: this.config.model,
       });
@@ -261,7 +245,7 @@ export class OpenAIService {
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
-      this.logger.error('OpenAI connection test failed', {
+      this.logger.error('Gemini connection test failed', {
         error: error instanceof Error ? error.message : String(error),
         responseTimeMs: responseTime,
       });
@@ -283,6 +267,7 @@ export class OpenAIService {
   private buildSentimentPrompt(request: SentimentAnalysisRequest): string {
     const { content, source, coins, analysisDepth } = request;
 
+    const systemPrompt = this.getSystemPrompt(analysisDepth);
     const basePrompt = `
 Analyze the sentiment of this cryptocurrency-related content:
 
@@ -294,8 +279,10 @@ Analyze the sentiment of this cryptocurrency-related content:
 Please analyze this content and determine its potential impact on the specified cryptocurrencies.
     `.trim();
 
+    const fullPrompt = systemPrompt + '\n\n' + basePrompt;
+
     if (analysisDepth === 'comprehensive') {
-      return basePrompt + `
+      return fullPrompt + `
 
 Consider the following factors in your comprehensive analysis:
 1. Market sentiment indicators and language tone
@@ -308,7 +295,7 @@ Consider the following factors in your comprehensive analysis:
 Provide detailed reasoning for your assessment.`;
     }
 
-    return basePrompt + '\n\nProvide a concise analysis focusing on the direct market impact.';
+    return fullPrompt + '\n\nProvide a concise analysis focusing on the direct market impact.';
   }
 
   /**
@@ -348,11 +335,21 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
   }
 
   /**
-   * Parse OpenAI response into structured result
+   * Parse Gemini response into structured result
    */
   private parseAnalysisResult(responseText: string): SentimentAnalysisResult {
     try {
-      const parsed = JSON.parse(responseText);
+      // Clean up the response text to extract JSON
+      let jsonText = responseText.trim();
+
+      // Remove markdown code blocks if present
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      const parsed = JSON.parse(jsonText);
 
       // Validate required fields
       if (!parsed.impact || !['Positive', 'Negative', 'Neutral'].includes(parsed.impact)) {
@@ -381,7 +378,7 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
         reasoning: parsed.reasoning || 'No reasoning provided',
       };
     } catch (error) {
-      this.logger.error('Failed to parse OpenAI response', {
+      this.logger.error('Failed to parse Gemini response', {
         error: error instanceof Error ? error.message : String(error),
         response: responseText.slice(0, 500),
       });
@@ -392,7 +389,7 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
         confidence_score: 0,
         summary: 'Analysis failed - unable to parse response',
         affected_coins: [],
-        reasoning: 'OpenAI response parsing failed',
+        reasoning: 'Gemini response parsing failed',
       };
     }
   }
@@ -430,11 +427,15 @@ Provide more detailed reasoning and lower confidence scores for ambiguous situat
 }
 
 /**
- * Create OpenAI service instance
+ * Create Gemini service instance
  */
-export function createOpenAIService(
-  config: OpenAIConfig,
+export function createGeminiService(
+  config: GeminiConfig,
   logger: Logger
-): OpenAIService {
-  return new OpenAIService(config, logger);
+): GeminiService {
+  return new GeminiService(config, logger);
 }
+
+// Re-export types for compatibility
+export type { GeminiConfig as OpenAIConfig, SentimentAnalysisRequest, SentimentAnalysisResult };
+export { GeminiService as OpenAIService, createGeminiService as createOpenAIService };

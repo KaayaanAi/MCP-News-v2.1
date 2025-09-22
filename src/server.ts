@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { getLogger } from './utils/logger.js';
 import type { Logger } from './types/index.js';
 import { createCacheService } from './services/cache_service.js';
-import { createOpenAIService } from './services/openai_service.js';
+import { createOpenAIService } from './services/gemini_service.js';
 import { createAnalyzeCryptoSentimentTool } from './tools/analyze_crypto_sentiment.js';
 import { createGetMarketNewsTool } from './tools/get_market_news.js';
 import { createValidateNewsSourceTool } from './tools/validate_news_source.js';
@@ -27,10 +27,10 @@ const EnvSchema = z.object({
   HTTP_PORT: z.coerce.number().default(4009),
   API_KEY: z.string().optional(),
   CORS_ORIGINS: z.string().default('*'),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4'),
-  OPENAI_MAX_COMPLETION_TOKENS: z.coerce.number().default(1000),
-  OPENAI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash-exp'),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().default(1000),
+  GEMINI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
   REDIS_URL: z.string().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().default(300),
   ENABLE_CACHE: z.coerce.boolean().default(true),
@@ -88,6 +88,13 @@ export class MCPNewsServer {
       port: this.config.HTTP_PORT,
       nodeEnv: this.config.NODE_ENV,
     });
+  }
+
+  /**
+   * Get logger instance for external access
+   */
+  get loggerInstance(): Logger {
+    return this.logger;
   }
 
   private setupMiddleware(): void {
@@ -256,21 +263,21 @@ export class MCPNewsServer {
     }
 
     const openaiService = createOpenAIService({
-      apiKey: this.config.OPENAI_API_KEY,
-      model: this.config.OPENAI_MODEL,
-      maxCompletionTokens: this.config.OPENAI_MAX_COMPLETION_TOKENS,
-      temperature: this.config.OPENAI_TEMPERATURE,
-      mockMode: this.config.MOCK_EXTERNAL_APIS || !this.config.OPENAI_API_KEY,
+      apiKey: this.config.GEMINI_API_KEY,
+      model: this.config.GEMINI_MODEL,
+      maxOutputTokens: this.config.GEMINI_MAX_OUTPUT_TOKENS,
+      temperature: this.config.GEMINI_TEMPERATURE,
+      mockMode: this.config.MOCK_EXTERNAL_APIS || !this.config.GEMINI_API_KEY,
     }, this.logger);
 
     const healthCheck = await openaiService.testConnection();
     if (healthCheck.success) {
-      this.logger.info('OpenAI service initialized', {
+      this.logger.info('Gemini service initialized', {
         status: healthCheck.data?.status,
         model: healthCheck.data?.model
       });
     } else {
-      this.logger.warn('OpenAI service initialization warning', { error: healthCheck.error });
+      this.logger.warn('Gemini service initialization warning', { error: healthCheck.error });
     }
 
     await this.initializeTools(openaiService);
@@ -477,7 +484,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 
   server.start().catch((error) => {
-    console.error('Fatal error starting server:', error);
+    // Use server's logger if available, fallback to console for fatal startup errors
+    try {
+      server.loggerInstance?.error('Fatal error starting server', error);
+    } catch {
+      console.error('Fatal error starting server:', error);
+    }
     process.exit(1);
   });
 }

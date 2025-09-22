@@ -136,66 +136,6 @@ export class SlidingWindowRateLimiter implements RateLimiter {
   }
 }
 
-/**
- * Multi-tier rate limiter with different limits for different identifiers
- */
-export class MultiTierRateLimiter {
-  private limiters = new Map<string, SlidingWindowRateLimiter>();
-  private cache: CacheService;
-  private logger: Logger;
-  private defaultLimiter: SlidingWindowRateLimiter;
-
-  constructor(
-    cache: CacheService,
-    logger: Logger,
-    defaultLimits: { windowMs: number; maxRequests: number }
-  ) {
-    this.cache = cache;
-    this.logger = logger.child({ component: 'MultiTierRateLimiter' });
-
-    // Create default rate limiter
-    this.defaultLimiter = new SlidingWindowRateLimiter(cache, logger, defaultLimits);
-  }
-
-  /**
-   * Add a custom rate limiter for specific tier
-   */
-  addTier(
-    tierName: string,
-    limits: { windowMs: number; maxRequests: number }
-  ): void {
-    const limiter = new SlidingWindowRateLimiter(this.cache, this.logger, limits);
-    this.limiters.set(tierName, limiter);
-
-    this.logger.info('Added rate limiter tier', {
-      tierName,
-      windowMs: limits.windowMs,
-      maxRequests: limits.maxRequests
-    });
-  }
-
-  /**
-   * Check rate limit using appropriate tier
-   */
-  async checkLimit(identifier: string, tier?: string): Promise<RateLimitInfo> {
-    const limiter = tier && this.limiters.has(tier)
-      ? this.limiters.get(tier)!
-      : this.defaultLimiter;
-
-    return limiter.checkLimit(identifier);
-  }
-
-  /**
-   * Reset rate limit for identifier
-   */
-  async resetLimit(identifier: string, tier?: string): Promise<void> {
-    const limiter = tier && this.limiters.has(tier)
-      ? this.limiters.get(tier)!
-      : this.defaultLimiter;
-
-    return limiter.resetLimit(identifier);
-  }
-}
 
 /**
  * Rate limiter middleware factory for Express
@@ -260,32 +200,3 @@ export function createRateLimitMiddleware(
   };
 }
 
-/**
- * Global rate limiter instance
- */
-let globalRateLimiter: RateLimiter | null = null;
-
-/**
- * Initialize global rate limiter
- */
-export function initializeRateLimiter(
-  cache: CacheService,
-  logger: Logger,
-  options: {
-    windowMs: number;
-    maxRequests: number;
-  }
-): RateLimiter {
-  globalRateLimiter = new SlidingWindowRateLimiter(cache, logger, options);
-  return globalRateLimiter;
-}
-
-/**
- * Get global rate limiter instance
- */
-export function getRateLimiter(): RateLimiter {
-  if (!globalRateLimiter) {
-    throw new Error('Rate limiter not initialized. Call initializeRateLimiter first.');
-  }
-  return globalRateLimiter;
-}

@@ -18,7 +18,7 @@ const EnvironmentSchema = z.object({
   // API Keys (optional, will disable corresponding integrations if not provided)
   NEWS_API_KEY: z.string().optional(),
   CRYPTO_PANIC_API_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
 
   // Redis configuration
   REDIS_URL: z.string().default('redis://localhost:6379'),
@@ -39,10 +39,10 @@ const EnvironmentSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LOG_PRETTY: z.coerce.boolean().default(true),
 
-  // OpenAI configuration
-  OPENAI_MODEL: z.string().default('gpt-3.5-turbo'),
-  OPENAI_MAX_TOKENS: z.coerce.number().default(1000),
-  OPENAI_TEMPERATURE: z.coerce.number().default(0.3),
+  // Gemini AI configuration
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash'),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().default(1000),
+  GEMINI_TEMPERATURE: z.coerce.number().default(0.1),
 });
 
 type EnvironmentConfig = z.infer<typeof EnvironmentSchema>;
@@ -119,9 +119,9 @@ export function validateProductionConfig(): { isValid: boolean; errors: string[]
       errors.push('No news API keys configured for production deployment');
     }
 
-    // OpenAI key should be configured for sentiment analysis
-    if (!config.OPENAI_API_KEY) {
-      errors.push('OPENAI_API_KEY not configured for production deployment');
+    // Gemini API key should be configured for sentiment analysis
+    if (!config.GEMINI_API_KEY) {
+      errors.push('GEMINI_API_KEY not configured for production deployment');
     }
 
     // Mock mode should not be enabled in production

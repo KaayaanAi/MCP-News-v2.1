@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { Logger, Tool, CacheService as _CacheService } from './types/index.js';
 import { getLogger } from './utils/logger.js';
 import { createCacheService } from './services/cache_service.js';
-import { createOpenAIService } from './services/openai_service.js';
+import { createOpenAIService } from './services/gemini_service.js';
 import { createAnalyzeCryptoSentimentTool } from './tools/analyze_crypto_sentiment.js';
 import { createGetMarketNewsTool } from './tools/get_market_news.js';
 import { createValidateNewsSourceTool } from './tools/validate_news_source.js';
@@ -27,10 +27,10 @@ const EnvSchema = z.object({
   HTTP_PORT: z.coerce.number().default(4009),
   API_KEY: z.string().optional(),
   CORS_ORIGINS: z.string().default('*'),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default('gpt-4'),
-  OPENAI_MAX_COMPLETION_TOKENS: z.coerce.number().default(1000),
-  OPENAI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default('gemini-2.0-flash-exp'),
+  GEMINI_MAX_OUTPUT_TOKENS: z.coerce.number().default(1000),
+  GEMINI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.1),
   REDIS_URL: z.string().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().default(300),
   ENABLE_CACHE: z.coerce.boolean().default(true),
@@ -120,6 +120,13 @@ export class HttpMCPServer {
       hasApiKey: !!this.config.API_KEY,
       corsOrigins: this.config.CORS_ORIGINS,
     });
+  }
+
+  /**
+   * Get logger instance for external access
+   */
+  get loggerInstance(): Logger {
+    return this.logger;
   }
 
   /**
@@ -379,11 +386,12 @@ export class HttpMCPServer {
    * Handle tools/call request
    */
   private async handleToolsCall(params?: unknown): Promise<unknown> {
-    if (!params || !params.name) {
+    if (!params || typeof params !== 'object' || !('name' in params)) {
       throw new Error('Missing required parameter: name');
     }
 
-    const { name, arguments: args } = params;
+    const typedParams = params as { name: string; arguments?: Record<string, unknown> };
+    const { name, arguments: args } = typedParams;
     this.logger.info('Handling tools/call request', {
       toolName: name,
       hasArguments: !!args,
@@ -424,7 +432,7 @@ export class HttpMCPServer {
       error: {
         code,
         message,
-        ...(data && { data }),
+        ...(data ? { data } : {}),
       },
       id,
     };
@@ -444,31 +452,31 @@ export class HttpMCPServer {
       });
     }
 
-    // Initialize OpenAI service
+    // Initialize Gemini service
     const openaiService = createOpenAIService(
       {
-        apiKey: this.config.OPENAI_API_KEY || '',
-        model: this.config.OPENAI_MODEL,
-        maxCompletionTokens: this.config.OPENAI_MAX_COMPLETION_TOKENS,
-        temperature: this.config.OPENAI_TEMPERATURE,
+        apiKey: this.config.GEMINI_API_KEY || '',
+        model: this.config.GEMINI_MODEL,
+        maxOutputTokens: this.config.GEMINI_MAX_OUTPUT_TOKENS,
+        temperature: this.config.GEMINI_TEMPERATURE,
       },
       this.logger
     );
 
-    // Test OpenAI connection if key is provided
-    if (this.config.OPENAI_API_KEY) {
+    // Test Gemini connection if key is provided
+    if (this.config.GEMINI_API_KEY) {
       const healthCheck = await openaiService.testConnection();
       if (!healthCheck.success) {
-        this.logger.warn('OpenAI connection test failed', {
+        this.logger.warn('Gemini connection test failed', {
           error: healthCheck.error
         });
       } else {
-        this.logger.info('OpenAI connection verified');
+        this.logger.info('Gemini connection verified');
       }
     }
 
     // Initialize tools
-    await this.initializeTools(openaiService);
+    await this.initializeTools(openaiService as any);
   }
 
   /**
@@ -481,7 +489,7 @@ export class HttpMCPServer {
 
     // Initialize tools with the same schemas as the main MCP server
     const sentimentTool = createAnalyzeCryptoSentimentTool(
-      openaiService,
+      openaiService as any,
       toolCache,
       this.logger,
       { cacheTtlSeconds: this.config.CACHE_TTL_SECONDS }
@@ -534,13 +542,14 @@ export class HttpMCPServer {
         required: ['content'],
         additionalProperties: false,
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (args: unknown) => {
+        const typedArgs = args as Record<string, unknown>;
         const context: import('./types/index.js').ToolExecutionContext = {
           requestId: Date.now().toString(),
           protocol: 'http',
           timestamp: Date.now()
         };
-        return sentimentTool.execute(args, context);
+        return sentimentTool.execute(typedArgs, context);
       },
     });
 
@@ -578,13 +587,14 @@ export class HttpMCPServer {
         required: [],
         additionalProperties: false,
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (args: unknown) => {
+        const typedArgs = args as Record<string, unknown>;
         const context: import('./types/index.js').ToolExecutionContext = {
           requestId: Date.now().toString(),
           protocol: 'http',
           timestamp: Date.now()
         };
-        return newsTool.execute(args, context);
+        return newsTool.execute(typedArgs, context);
       },
     });
 
@@ -623,13 +633,14 @@ export class HttpMCPServer {
           { required: ['domain'] },
         ],
       },
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (args: unknown) => {
+        const typedArgs = args as Record<string, unknown>;
         const context: import('./types/index.js').ToolExecutionContext = {
           requestId: Date.now().toString(),
           protocol: 'http',
           timestamp: Date.now()
         };
-        return validationTool.execute(args, context);
+        return validationTool.execute(typedArgs, context);
       },
     });
 
@@ -719,7 +730,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   // Start the server
   server.start().catch((error) => {
-    console.error('Fatal error starting HTTP MCP server:', error);
+    // Use server's logger if available, fallback to console for fatal startup errors
+    try {
+      server.loggerInstance?.error('Fatal error starting HTTP MCP server', error);
+    } catch {
+      console.error('Fatal error starting HTTP MCP server:', error);
+    }
     process.exit(1);
   });
 }
